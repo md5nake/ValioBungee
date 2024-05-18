@@ -22,6 +22,7 @@ import com.imaginarycode.minecraft.redisbungee.api.tasks.RedisPipelineTask;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.json.JSONComponentSerializer;
 import org.json.JSONObject;
+import org.slf4j.LoggerFactory;
 import redis.clients.jedis.ClusterPipeline;
 import redis.clients.jedis.Pipeline;
 import redis.clients.jedis.Response;
@@ -251,7 +252,15 @@ public abstract class PlayerDataManager<P, LE, DE, PS extends IPubSubMessageEven
                         responses.put(uuid, pipeline.hget("redis-bungee::" + networkId + "::player::" + uuid + "::data", "server"));
                     }
                     pipeline.sync();
-                    responses.forEach((uuid, response) -> builder.put(response.get(), uuid));
+                    responses.forEach((uuid, response) -> {
+                        String key = response.get();
+
+                        if (key != null) {
+                            builder.put(key, uuid);
+                        } else {
+                            LoggerFactory.getLogger("RedisBungee").warn("Player " + uuid + " has no server data in Redis. Ignoring.");
+                        }
+                    });
                     return builder.build();
                 }
 
@@ -262,7 +271,15 @@ public abstract class PlayerDataManager<P, LE, DE, PS extends IPubSubMessageEven
                         responses.put(uuid, pipeline.hget("redis-bungee::" + networkId + "::player::" + uuid + "::data", "server"));
                     }
                     pipeline.sync();
-                    responses.forEach((uuid, response) -> builder.put(response.get(), uuid));
+                    responses.forEach((uuid, response) -> {
+                        String key = response.get();
+
+                        if (key != null) {
+                            builder.put(key, uuid);
+                        } else {
+                            LoggerFactory.getLogger("RedisBungee").warn("Player " + uuid + " has no server data in Redis. Ignoring.");
+                        }
+                    });
                     return builder.build();
                 }
             }.call();
