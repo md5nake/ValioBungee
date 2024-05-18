@@ -23,10 +23,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.json.JSONComponentSerializer;
 import org.json.JSONObject;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.ClusterPipeline;
-import redis.clients.jedis.Pipeline;
-import redis.clients.jedis.Response;
-import redis.clients.jedis.UnifiedJedis;
+import redis.clients.jedis.*;
 
 import java.net.InetAddress;
 import java.util.HashMap;
@@ -247,25 +244,15 @@ public abstract class PlayerDataManager<P, LE, DE, PS extends IPubSubMessageEven
 
                 @Override
                 public Multimap<String, UUID> doPooledPipeline(Pipeline pipeline) {
-                    HashMap<UUID, Response<String>> responses = new HashMap<>();
-                    for (UUID uuid : uuids) {
-                        responses.put(uuid, pipeline.hget("redis-bungee::" + networkId + "::player::" + uuid + "::data", "server"));
-                    }
-                    pipeline.sync();
-                    responses.forEach((uuid, response) -> {
-                        String key = response.get();
-
-                        if (key != null) {
-                            builder.put(key, uuid);
-                        } else {
-                            LoggerFactory.getLogger("RedisBungee").warn("Player " + uuid + " has no server data in Redis. Ignoring.");
-                        }
-                    });
-                    return builder.build();
+                    return buildWithPipeline(pipeline);
                 }
 
                 @Override
                 public Multimap<String, UUID> clusterPipeline(ClusterPipeline pipeline) {
+                    return buildWithPipeline(pipeline);
+                }
+
+                private Multimap<String, UUID> buildWithPipeline(AbstractPipeline pipeline) {
                     HashMap<UUID, Response<String>> responses = new HashMap<>();
                     for (UUID uuid : uuids) {
                         responses.put(uuid, pipeline.hget("redis-bungee::" + networkId + "::player::" + uuid + "::data", "server"));
