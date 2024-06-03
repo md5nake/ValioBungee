@@ -12,7 +12,6 @@ package com.imaginarycode.minecraft.redisbungee;
 
 import com.imaginarycode.minecraft.redisbungee.api.PlayerDataManager;
 import com.imaginarycode.minecraft.redisbungee.api.RedisBungeePlugin;
-import com.imaginarycode.minecraft.redisbungee.api.config.RedisBungeeConfiguration;
 import com.imaginarycode.minecraft.redisbungee.events.PlayerChangedServerNetworkEvent;
 import com.imaginarycode.minecraft.redisbungee.events.PlayerLeftNetworkEvent;
 import com.imaginarycode.minecraft.redisbungee.events.PubSubMessageEvent;
@@ -24,7 +23,6 @@ import com.velocitypowered.api.event.connection.LoginEvent;
 import com.velocitypowered.api.event.connection.PostLoginEvent;
 import com.velocitypowered.api.event.player.ServerConnectedEvent;
 import com.velocitypowered.api.proxy.Player;
-import net.kyori.adventure.text.Component;
 
 import java.util.concurrent.TimeUnit;
 
@@ -34,25 +32,39 @@ public class VelocityPlayerDataManager extends PlayerDataManager<Player, PostLog
     }
 
     @Override
-    @Subscribe
     public void onPlayerChangedServerNetworkEvent(PlayerChangedServerNetworkEvent event) {
         handleNetworkPlayerServerChange(event);
     }
 
-    @Override
     @Subscribe
+    public void onPlayerChangedServerNetworkEvent(PlayerChangedServerNetworkEvent event, Continuation continuation) {
+        continuation.resume();
+        onPlayerChangedServerNetworkEvent(event);
+    }
+
+    @Override
     public void onNetworkPlayerQuit(PlayerLeftNetworkEvent event) {
         handleNetworkPlayerQuit(event);
     }
 
-    @Override
     @Subscribe
+    public void onNetworkPlayerQuit(PlayerLeftNetworkEvent event, Continuation continuation) {
+        continuation.resume();
+        onNetworkPlayerQuit(event);
+    }
+
+    @Override
     public void onPubSubMessageEvent(PubSubMessageEvent event) {
         handlePubSubMessageEvent(event);
     }
 
-    @Override
     @Subscribe
+    public void onPubSubMessageEvent(PubSubMessageEvent event, Continuation continuation) {
+        continuation.resume();
+        onPubSubMessageEvent(event);
+    }
+
+    @Override
     public void onServerConnectedEvent(ServerConnectedEvent event) {
         final String currentServer = event.getServer().getServerInfo().getName();
         final String oldServer;
@@ -62,6 +74,12 @@ public class VelocityPlayerDataManager extends PlayerDataManager<Player, PostLog
             oldServer = null;
         }
         super.playerChangedServer(event.getPlayer().getUniqueId(), oldServer, currentServer);
+    }
+
+    @Subscribe
+    public void onServerConnectedEvent(ServerConnectedEvent event, Continuation continuation) {
+        continuation.resume();
+        onServerConnectedEvent(event);
     }
 
     @Subscribe
@@ -82,16 +100,26 @@ public class VelocityPlayerDataManager extends PlayerDataManager<Player, PostLog
     }
 
     @Override
-    @Subscribe
     public void onLoginEvent(PostLoginEvent event) {
         addPlayer(event.getPlayer().getUniqueId(), event.getPlayer().getUsername(), event.getPlayer().getRemoteAddress().getAddress());
     }
 
-    @Override
     @Subscribe
+    public void onLoginEvent(PostLoginEvent event, Continuation continuation) {
+        continuation.resume();
+        onLoginEvent(event);
+    }
+
+    @Override
     public void onDisconnectEvent(DisconnectEvent event) {
         if (event.getLoginStatus() == DisconnectEvent.LoginStatus.SUCCESSFUL_LOGIN || event.getLoginStatus() == DisconnectEvent.LoginStatus.PRE_SERVER_JOIN) {
             removePlayer(event.getPlayer().getUniqueId());
         }
+    }
+
+    @Subscribe
+    public void onDisconnectEvent(DisconnectEvent event, Continuation continuation) {
+        onDisconnectEvent(event);
+        continuation.resume();
     }
 }
