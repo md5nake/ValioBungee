@@ -87,9 +87,10 @@ public class VelocityPlayerDataManager extends PlayerDataManager<Player, PostLog
         // check if online
         if (getLastOnline(event.getPlayer().getUniqueId()) == 0) {
             if (plugin.configuration().kickWhenOnline()) {
+                // Wait before releasing the event so that the other proxies have to kick the player
+                plugin.executeAsyncAfter(continuation::resume, TimeUnit.MILLISECONDS, 400);
+
                 kickPlayer(event.getPlayer().getUniqueId(), plugin.langConfiguration().messages().loggedInFromOtherLocation());
-                // wait 3 seconds before releasing the event
-                plugin.executeAsyncAfter(continuation::resume, TimeUnit.SECONDS, 3);
             } else {
                 event.setResult(ResultedEvent.ComponentResult.denied(plugin.langConfiguration().messages().alreadyLoggedIn()));
                 continuation.resume();
