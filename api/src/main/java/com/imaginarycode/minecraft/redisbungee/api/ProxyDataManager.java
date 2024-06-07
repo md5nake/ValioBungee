@@ -40,27 +40,19 @@ import static com.google.common.base.Preconditions.checkArgument;
 public abstract class ProxyDataManager implements Runnable {
 
     private static final int MAX_ENTRIES = 10000;
-
+    protected final RedisBungeePlugin<?> plugin;
     private final AtomicBoolean closed = new AtomicBoolean(false);
-
     private final UnifiedJedis unifiedJedis;
-
     // data:
     // Proxy id, heartbeat (unix epoch from instant), players as int
     private final ConcurrentHashMap<String, HeartbeatPayload.HeartbeatData> heartbeats = new ConcurrentHashMap<>();
-
     private final String networkId;
-
     private final String proxyId;
-
     private final String STREAM_ID;
-
     // This different from proxy id, just to detect if there is duplicate proxy using same proxy id
     private final UUID dataManagerUUID = UUID.randomUUID();
-
-    protected final RedisBungeePlugin<?> plugin;
-
     private final Gson gson = new GsonBuilder().registerTypeAdapter(AbstractPayload.class, new AbstractPayloadSerializer()).registerTypeAdapter(HeartbeatPayload.class, new HeartbeatPayloadSerializer()).registerTypeAdapter(DeathPayload.class, new DeathPayloadSerializer()).registerTypeAdapter(PubSubPayload.class, new PubSubPayloadSerializer()).registerTypeAdapter(RunCommandPayload.class, new RunCommandPayloadSerializer()).create();
+    private StreamEntryID lastStreamEntryID;
 
     public ProxyDataManager(RedisBungeePlugin<?> plugin) {
         this.plugin = plugin;
@@ -176,7 +168,6 @@ public abstract class ProxyDataManager implements Runnable {
         this.unifiedJedis.xadd(STREAM_ID, XAddParams.xAddParams().maxLen(MAX_ENTRIES).id(StreamEntryID.NEW_ENTRY), data);
     }
 
-
     private void handleHeartBeat(HeartbeatPayload payload) {
         String id = payload.senderProxy();
         if (!heartbeats.containsKey(id)) {
@@ -184,7 +175,6 @@ public abstract class ProxyDataManager implements Runnable {
         }
         heartbeats.put(id, payload.data());
     }
-
 
     // call every 1 minutes
     public void correctionTask() {
@@ -309,7 +299,6 @@ public abstract class ProxyDataManager implements Runnable {
         }
     }
 
-
     public void addPlayer(UUID uuid) {
         this.unifiedJedis.sadd("redisbungee::" + this.networkId + "::proxies::" + this.proxyId + "::online-players", uuid.toString());
     }
@@ -331,14 +320,18 @@ public abstract class ProxyDataManager implements Runnable {
         return uuids;
     }
 
-    private StreamEntryID lastStreamEntryID;
-
     // polling from stream
     @Override
     public void run() {
         while (!isClosed()) {
             try {
-                List<java.util.Map.Entry<String, List<StreamEntry>>> data = unifiedJedis.xread(XReadParams.xReadParams().block(0), Collections.singletonMap(STREAM_ID, lastStreamEntryID != null ? lastStreamEntryID : StreamEntryID.LAST_ENTRY));
+                List<java.util.Map.Entry<String, List<StreamEntry>>> data = unifiedJedis.xread(XReadParams.xReadParams().block(2000), Collections.singletonMap(STREAM_ID, lastStreamEntryID != null ? lastStreamEntryID : StreamEntryID.LAST_ENTRY));
+
+                if (data == null) {
+                    plugin.logWarn("Exceeded timeout and got no data from pubsub stream. Retrying...");
+                    continue;
+                }
+
                 for (Map.Entry<String, List<StreamEntry>> datum : data) {
                     for (StreamEntry streamEntry : datum.getValue()) {
                         this.lastStreamEntryID = streamEntry.getID();
@@ -368,13 +361,15 @@ public abstract class ProxyDataManager implements Runnable {
                     }
                 }
             } catch (Exception e) {
-                this.plugin.logFatal("an error has occurred in the stream", e);
+                this.plugin.logFatal("An error has occurred in the pubsub stream: ", e);
                 try {
                     Thread.sleep(5000);
                 } catch (InterruptedException ignored) {
                 }
             }
         }
+
+        this.plugin.logFatal("RedisBungee pubsub thread has been closed");
     }
 
     public void close() {
