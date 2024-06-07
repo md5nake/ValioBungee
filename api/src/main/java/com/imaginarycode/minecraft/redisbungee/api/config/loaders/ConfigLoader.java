@@ -28,6 +28,8 @@ import redis.clients.jedis.providers.PooledConnectionProvider;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 public interface ConfigLoader extends GenericConfigLoader {
@@ -150,7 +152,13 @@ public interface ConfigLoader extends GenericConfigLoader {
             Set<HostAndPort> hostAndPortSet = new HashSet<>();
             GenericObjectPoolConfig<Connection> poolConfig = new GenericObjectPoolConfig<>();
             poolConfig.setMaxTotal(maxConnections);
-            poolConfig.setBlockWhenExhausted(true);
+            poolConfig.setMaxIdle(maxConnections);
+            poolConfig.setMaxWait(Duration.of(1000, ChronoUnit.MILLIS));
+            poolConfig.setTestOnCreate(true);
+            poolConfig.setTestWhileIdle(true);
+            poolConfig.setTestOnReturn(true);
+            poolConfig.setTestOnBorrow(true);
+
             node.getNode("redis-cluster-servers").getChildrenList().forEach((childNode) -> {
                 Map<Object, ? extends ConfigurationNode> hostAndPort = childNode.getChildrenMap();
                 String host = hostAndPort.get("host").getString();
@@ -161,7 +169,7 @@ public interface ConfigLoader extends GenericConfigLoader {
             if (hostAndPortSet.isEmpty()) {
                 throw new RuntimeException("No redis cluster servers specified");
             }
-            summoner = new JedisClusterSummoner(new ClusterConnectionProvider(hostAndPortSet, DefaultJedisClientConfig.builder().user(redisUsername).password(redisPassword).ssl(useSSL).socketTimeoutMillis(5000).timeoutMillis(10000).build(), poolConfig));
+            summoner = new JedisClusterSummoner(new ClusterConnectionProvider(hostAndPortSet, DefaultJedisClientConfig.builder().user(redisUsername).password(redisPassword).ssl(useSSL).timeoutMillis(20000).socketTimeoutMillis(10000).build(), poolConfig));
             redisBungeeMode = RedisBungeeMode.CLUSTER;
         } else {
             plugin.logInfo("RedisBungee MODE: SINGLE");
@@ -180,8 +188,14 @@ public interface ConfigLoader extends GenericConfigLoader {
             }
             GenericObjectPoolConfig<Connection> poolConfig = new GenericObjectPoolConfig<>();
             poolConfig.setMaxTotal(maxConnections);
-            poolConfig.setBlockWhenExhausted(true);
-            summoner = new JedisPooledSummoner(new PooledConnectionProvider(new ConnectionFactory(new HostAndPort(redisServer, redisPort), DefaultJedisClientConfig.builder().user(redisUsername).timeoutMillis(5000).ssl(useSSL).password(redisPassword).build()), poolConfig), jedisPool);
+            poolConfig.setMaxIdle(maxConnections);
+            poolConfig.setMaxWait(Duration.of(1000, ChronoUnit.MILLIS));
+            poolConfig.setTestOnCreate(true);
+            poolConfig.setTestWhileIdle(true);
+            poolConfig.setTestOnReturn(true);
+            poolConfig.setTestOnBorrow(true);
+
+            summoner = new JedisPooledSummoner(new PooledConnectionProvider(new ConnectionFactory(new HostAndPort(redisServer, redisPort), DefaultJedisClientConfig.builder().user(redisUsername).timeoutMillis(20000).socketTimeoutMillis(10000).ssl(useSSL).password(redisPassword).build()), poolConfig), jedisPool);
             redisBungeeMode = RedisBungeeMode.SINGLE;
         }
         plugin.logInfo("Successfully connected to Redis.");
